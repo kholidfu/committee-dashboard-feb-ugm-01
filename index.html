@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Dashboard Registrasi Reuni FEB UGM 2001</title>
+
+  <!-- Open Graph / WhatsApp Preview Meta Tags -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://project-re-connect-feb-01.netlify.app/">
+  <meta property="og:title" content="Dashboard Registrasi Reuni FEB UGM 2001">
+  <meta property="og:description" content="Update terkini status kehadiran, domisili, donasi, dan pendaftaran reuni alumni FEB UGM 2001.">
+  <meta property="og:image" content="https://project-re-connect-feb-01.netlify.app/gedung-feb.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <!-- Library Chart.js & PapaParse -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f0f2f5;
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 25px;
+      color: #1a365d;
+    }
+
+    /* Grid Stat Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      max-width: 1200px;
+      margin: 0 auto 25px auto;
+    }
+
+    .summary-card {
+      color: white;
+      padding: 18px 15px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .summary-card.pembayaran { background: linear-gradient(135deg, #2b6cb0, #2c5282); }
+    .summary-card.donasi { background: linear-gradient(135deg, #2f855a, #276749); }
+    .summary-card.stat-today { background: linear-gradient(135deg, #dd6b20, #c05621); }
+    .summary-card.stat-yesterday { background: linear-gradient(135deg, #d69e2e, #b7791f); }
+    .summary-card.stat-7days { background: linear-gradient(135deg, #805ad5, #6b46c1); }
+
+    .summary-card h2 {
+      margin: 0 0 8px 0;
+      font-size: 0.95rem;
+      font-weight: 500;
+      opacity: 0.95;
+    }
+
+    .summary-card .amount {
+      font-size: 1.6rem;
+      font-weight: bold;
+      margin: 0;
+    }
+
+    .summary-card .sub-detail {
+      font-size: 0.85rem;
+      margin-top: 5px;
+      opacity: 0.9;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      margin-bottom: 15px;
+      text-align: center;
+      color: #2b6cb0;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 320px;
+      width: 100%;
+    }
+
+    #loading {
+      text-align: center;
+      font-size: 1.2rem;
+      color: #4a5568;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📊 Dashboard Registrasi Reuni FEB UGM 2001</h1>
+
+  <div id="loading">Memuat data dari Google Sheets...</div>
+
+  <!-- Stat Cards Keuangan & Pendaftar Baru -->
+  <div class="summary-grid">
+    <div class="summary-card pembayaran">
+      <h2>Total Uang Pendaftaran</h2>
+      <div class="amount" id="totalUangPendaftaran">Rp 0</div>
+    </div>
+
+    <div class="summary-card donasi">
+      <h2>Total Donasi Tunai</h2>
+      <div class="amount" id="totalDonasi">Rp 0</div>
+    </div>
+
+    <div class="summary-card stat-today">
+      <h2>Hari Ini</h2>
+      <div class="amount" id="countToday">0 Pendaftar</div>
+      <div class="sub-detail" id="donasiToday">Donasi: Rp 0</div>
+    </div>
+
+    <div class="summary-card stat-yesterday">
+      <h2>Kemarin</h2>
+      <div class="amount" id="countYesterday">0 Pendaftar</div>
+      <div class="sub-detail" id="donasiYesterday">Donasi: Rp 0</div>
+    </div>
+
+    <div class="summary-card stat-7days">
+      <h2>7 Hari Terakhir</h2>
+      <div class="amount" id="countLast7Days">0 Pendaftar</div>
+      <div class="sub-detail" id="donasiLast7Days">Donasi: Rp 0</div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- Chart 1: Status Kehadiran Per Wilayah (Full Width) -->
+    <div class="card full-width">
+      <h3>Kehadiran Peserta per Wilayah (Domisili)</h3>
+      <div class="chart-container">
+        <canvas id="domisiliKehadiranChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 2: Perbandingan Uang Pendaftaran vs Donasi per Peserta (Full Width) -->
+    <div class="card full-width">
+      <h3>Rincian Uang Pendaftaran & Donasi per Peserta</h3>
+      <div class="chart-container">
+        <canvas id="keuanganChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 3: Status Kehadiran Total -->
+    <div class="card">
+      <h3>Status Kehadiran (Total)</h3>
+      <div class="chart-container">
+        <canvas id="kehadiranChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Chart 4: Ukuran Kaos Utama -->
+    <div class="card">
+      <h3>Ukuran Kaos Utama</h3>
+      <div class="chart-container">
+        <canvas id="kaosChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const sheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSCmoWYJKJgTSFesPS9H7wuJWCwHZTmdiODINRsykcj-nVVbssZdXtREKIS7D-Zk5UxOX-YE1MYcXg_/pub?output=csv';
+
+    function parseRupiah(val) {
+      if (!val) return 0;
+      const cleanStr = String(val).replace(/[^\d]/g, '');
+      const parsed = parseInt(cleanStr, 10);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+
+    // Parsing fleksibel untuk berbagai format tanggal dari Google Form
+    function parseIndonesianDate(str) {
+      if (!str) return null;
+      
+      const cleanStr = str.trim();
+      
+      // Jika format "DD/MM/YYYY HH:mm:ss" atau "DD/MM/YYYY"
+      if (cleanStr.includes('/')) {
+        const parts = cleanStr.split(' ');
+        const dateParts = parts[0].split('/');
+        if (dateParts.length === 3) {
+          const day = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10) - 1;
+          const year = parseInt(dateParts[2], 10);
+          return new Date(year, month, day);
+        }
+      }
+
+      // Jika format "YYYY-MM-DD"
+      if (cleanStr.includes('-')) {
+        const parts = cleanStr.split(' ');
+        const dateParts = parts[0].split('-');
+        if (dateParts.length === 3) {
+          const year = parseInt(dateParts[0], 10);
+          const month = parseInt(dateParts[1], 10) - 1;
+          const day = parseInt(dateParts[2], 10);
+          return new Date(year, month, day);
+        }
+      }
+
+      const nativeDate = new Date(cleanStr);
+      if (!isNaN(nativeDate.getTime())) {
+        return new Date(nativeDate.getFullYear(), nativeDate.getMonth(), nativeDate.getDate());
+      }
+
+      return null;
+    }
+
+    function loadCsvData() {
+      Papa.parse(sheetCsvUrl, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          document.getElementById('loading').style.display = 'none';
+          const rawData = results.data;
+          renderDashboard(rawData);
+        },
+        error: function(err) {
+          document.getElementById('loading').innerText = 'Gagal memuat data dari Google Sheets.';
+          console.error("PapaParse Error:", err);
+        }
+      });
+    }
+
+    function renderDashboard(data) {
+      let totalUangPendaftaran = 0;
+      let totalDonasi = 0;
+
+      // Cari tanggal transaksi paling akhir dalam data agar acuan tanggal sinkron dengan sheet
+      let latestTimestamp = null;
+      data.forEach(row => {
+        if (row['Timestamp']) {
+          const parsed = parseIndonesianDate(row['Timestamp']);
+          if (parsed && (!latestTimestamp || parsed > latestTimestamp)) {
+            latestTimestamp = parsed;
+          }
+        }
+      });
+
+      const referenceDate = latestTimestamp ? latestTimestamp : new Date();
+      
+      const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 6);
+
+      let countToday = 0, donasiToday = 0;
+      let countYesterday = 0, donasiYesterday = 0;
+      let countLast7Days = 0, donasiLast7Days = 0;
+
+      data.forEach(row => {
+        const danaMasuk = parseRupiah(row['Total Pembayaran (Rp)']);
+        const dns = parseRupiah(row['Donasi Tunai (Rp)']);
+
+        const uangPendaftaranMurni = danaMasuk - dns;
+
+        totalUangPendaftaran += uangPendaftaranMurni;
+        totalDonasi += dns;
+
+        // Kalkulasi Waktu Pendaftaran
+        if (row['Timestamp']) {
+          const rowDateOnly = parseIndonesianDate(row['Timestamp']);
+          
+          if (rowDateOnly) {
+            const timeVal = rowDateOnly.getTime();
+
+            // Cek Hari Ini
+            if (timeVal === today.getTime()) {
+              countToday++;
+              donasiToday += dns;
+            }
+            
+            // Cek Kemarin
+            if (timeVal === yesterday.getTime()) {
+              countYesterday++;
+              donasiYesterday += dns;
+            }
+
+            // Cek 7 Hari Terakhir
+            if (timeVal >= sevenDaysAgo.getTime() && timeVal <= today.getTime()) {
+              countLast7Days++;
+              donasiLast7Days += dns;
+            }
+          }
+        }
+      });
+
+      // Update Tampilan Kartu Statistik
+      document.getElementById('totalUangPendaftaran').innerText = 'Rp ' + totalUangPendaftaran.toLocaleString('id-ID');
+      document.getElementById('totalDonasi').innerText = 'Rp ' + totalDonasi.toLocaleString('id-ID');
+
+      document.getElementById('countToday').innerText = countToday + ' Pendaftar';
+      document.getElementById('donasiToday').innerText = 'Donasi: Rp ' + donasiToday.toLocaleString('id-ID');
+
+      document.getElementById('countYesterday').innerText = countYesterday + ' Pendaftar';
+      document.getElementById('donasiYesterday').innerText = 'Donasi: Rp ' + donasiYesterday.toLocaleString('id-ID');
+
+      document.getElementById('countLast7Days').innerText = countLast7Days + ' Pendaftar';
+      document.getElementById('donasiLast7Days').innerText = 'Donasi: Rp ' + donasiLast7Days.toLocaleString('id-ID');
+
+      // Chart 1: Kehadiran per Wilayah
+      const domisiliMap = {};
+      data.forEach(row => {
+        const domisili = row['Domisili'] || 'Lainnya';
+        const status = row['Status Kehadiran'] || 'Belum Diisi';
+
+        if (!domisiliMap[domisili]) {
+          domisiliMap[domisili] = { Hadir: 0, 'Tidak Hadir': 0 };
+        }
+
+        if (status === 'Hadir') {
+          domisiliMap[domisili].Hadir += 1;
+        } else if (status === 'Tidak Hadir') {
+          domisiliMap[domisili]['Tidak Hadir'] += 1;
+        }
+      });
+
+      const listDomisili = Object.keys(domisiliMap);
+      new Chart(document.getElementById('domisiliKehadiranChart'), {
+        type: 'bar',
+        data: {
+          labels: listDomisili,
+          datasets: [
+            {
+              label: 'Hadir',
+              data: listDomisili.map(d => domisiliMap[d].Hadir),
+              backgroundColor: '#38a169'
+            },
+            {
+              label: 'Tidak Hadir',
+              data: listDomisili.map(d => domisiliMap[d]['Tidak Hadir']),
+              backgroundColor: '#e53e3e'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+      });
+
+      // Chart 2: Keuangan per Peserta
+      const labelsNama = data.map(row => row['Nama Lengkap'] || row['Nama Panggilan'] || 'Anonim');
+      new Chart(document.getElementById('keuanganChart'), {
+        type: 'bar',
+        data: {
+          labels: labelsNama,
+          datasets: [
+            {
+              label: 'Uang Pendaftaran (Rp)',
+              data: data.map(row => parseRupiah(row['Total Pembayaran (Rp)']) - parseRupiah(row['Donasi Tunai (Rp)'])),
+              backgroundColor: '#3182ce'
+            },
+            {
+              label: 'Donasi Tunai (Rp)',
+              data: data.map(row => parseRupiah(row['Donasi Tunai (Rp)'])),
+              backgroundColor: '#38a169'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.dataset.label}: Rp ${ctx.raw.toLocaleString('id-ID')}`
+              }
+            }
+          },
+          scales: {
+            y: {
+              ticks: {
+                callback: (val) => 'Rp ' + (val / 1000) + 'k'
+              }
+            }
+          }
+        }
+      });
+
+      // Chart 3: Status Kehadiran (Total)
+      const kehadiranCounts = {};
+      data.forEach(row => {
+        const status = row['Status Kehadiran'] || 'Belum Diisi';
+        kehadiranCounts[status] = (kehadiranCounts[status] || 0) + 1;
+      });
+
+      new Chart(document.getElementById('kehadiranChart'), {
+        type: 'pie',
+        data: {
+          labels: Object.keys(kehadiranCounts),
+          datasets: [{
+            data: Object.values(kehadiranCounts),
+            backgroundColor: ['#38a169', '#e53e3e', '#ecc94b']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // Chart 4: Ukuran Kaos Utama
+      const kaosCounts = {};
+      data.forEach(row => {
+        const ukuran = row['Kaos Utama (Ukuran)'] || 'Belum Diisi';
+        kaosCounts[ukuran] = (kaosCounts[ukuran] || 0) + 1;
+      });
+
+      new Chart(document.getElementById('kaosChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(kaosCounts),
+          datasets: [{
+            data: Object.values(kaosCounts),
+            backgroundColor: ['#ed8936', '#4299e1', '#9f7aea', '#ed64a6', '#48bb78', '#ecc94b']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    loadCsvData();
+  </script>
+</body>
+</html>
